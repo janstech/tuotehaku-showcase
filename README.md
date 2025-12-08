@@ -1,20 +1,32 @@
+# Wholesale Product Search Engine (Showcase)
 
-“Tämä repo näyttää otteita tuotantokäytössä olevasta tuotehaku-järjestelmästä”
+Tämä repositorio sisältää otteita tuotantokäytössä olevasta B2B-tuotehakujärjestelmästä. Järjestelmä yhdistää usean tukkutoimittajan (miljoonia rivejä) dataa yhteen nopeaan hakunäkymään.
 
-Arkkitehtuuri:
+⚠️ **Huomio:** *Koodi on anonymisoitu ja yksinkertaistettu demo-tarkoituksiin. API-avaimet, oikeat katelaskentakaavat ja asiakastiedot on poistettu.*
 
-- WordPress (frontend + REST)
-- FastAPI backend
-- MySQL
-- integraatiot tukkuihin
+## 🏗 Arkkitehtuuri
 
-Lista tiedostoista:
+Järjestelmä on rakennettu mikropalvelu-hengessä, jossa raskas datan käsittely on eriytetty WordPress-frontista.
 
-- backend/app_example.py – hakurajapinta
-- backend/supplier_update_example.py – toimittajadatapäivitys
-- backend/pricing_example.py – hintojen yhdistäminen
-- wordpress/tuotehaku_endpoint_example.php – WP-REST endpoint
+* **Frontend:** WordPress + Custom Plugin (PHP/JS)
+* **Backend API:** Python FastAPI (Async)
+* **Database:** MySQL (Fulltext search optimized)
+* **ETL & Integrations:** Python-skriptit (CSV/XML/API)
 
-Huomio:
+## 📂 Tiedostorakenne
 
-“Tämä ei ole täydellinen tuotantoversio, vaan anonymisoitu ja osittain yksinkertaistettu showcase.”
+| Tiedosto | Kuvaus |
+| :--- | :--- |
+| `backend/app_example.py` | **FastAPI Search API.** Hakulogiikka, välimuisti ja reititys. |
+| `backend/supplier_update_example.py` | **ETL Pipeline.** Datan nouto toimittajilta ja normalisointi tietokantaan. |
+| `backend/pricing_example.py` | **Business Logic.** Hintojen ja katteiden laskenta asiakasryhmittäin. |
+| `wordpress/tuotehaku_endpoint.php` | **WP REST Proxy.** Yhdistää WordPressin Python-backendiin turvallisesti. |
+
+## 🚀 Keskeiset ratkaisut
+
+* **Suorituskyky:** Raskas haku on siirretty pois PHP:ltä nopeaan Python-backendiin.
+* **Hakutarkkuus:** Hybridihaku (Strict match + Fuzzy logic) varmistaa, että oikeat tuotteet löytyvät myös kirjoitusvirheillä.
+* **Skalautuvuus:** Toimittajaintegraatiot ovat modulaarisia; uuden tukun lisääminen vaatii vain uuden `Adapter`-luokan.
+
+---
+*Copyright (c) 2025 Jan Sarivuo*
