@@ -1,4 +1,3 @@
-Lyhyt kuvaus:
 
 “Tämä repo näyttää otteita tuotantokäytössä olevasta tuotehaku-järjestelmästä”
 
