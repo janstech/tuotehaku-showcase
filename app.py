@@ -35,7 +35,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 # --------------------------------------------------------------------
 
 # Oikea URL tulee lukemalla esim. ympäristömuuttujasta tai .env-tiedostosta.
-# ÄLÄ koskaan commitoi oikeita tunnuksia GitHubiin.
+
 DATABASE_URL = os.getenv(
     "DEMO_DATABASE_URL",
     "postgresql://user:password@localhost:5432/demo_products",
