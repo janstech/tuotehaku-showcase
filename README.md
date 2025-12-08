@@ -2,7 +2,7 @@
 
 Tämä repositorio sisältää otteita tuotantokäytössä olevasta B2B-tuotehakujärjestelmästä. Järjestelmä yhdistää usean tukkutoimittajan (miljoonia rivejä) dataa yhteen nopeaan hakunäkymään.
 
-⚠️ **Huomio:** *Koodi on anonymisoitu ja yksinkertaistettu demo-tarkoituksiin. API-avaimet, oikeat katelaskentakaavat ja asiakastiedot on poistettu.*
+**Huomio:** *Koodi on anonymisoitu ja yksinkertaistettu demo-tarkoituksiin. API-avaimet, oikeat katelaskentakaavat ja asiakastiedot on poistettu.*
 
 ## 🏗 Arkkitehtuuri
 
@@ -13,7 +13,7 @@ Järjestelmä on rakennettu mikropalvelu-hengessä, jossa raskas datan käsittel
 * **Database:** MySQL (Fulltext search optimized)
 * **ETL & Integrations:** Python-skriptit (CSV/XML/API)
 
-## 📂 Tiedostorakenne
+## Tiedostorakenne
 
 | Tiedosto | Kuvaus |
 | :--- | :--- |
@@ -22,7 +22,7 @@ Järjestelmä on rakennettu mikropalvelu-hengessä, jossa raskas datan käsittel
 | `backend/pricing_example.py` | **Business Logic.** Hintojen ja katteiden laskenta asiakasryhmittäin. |
 | `wordpress/tuotehaku_endpoint.php` | **WP REST Proxy.** Yhdistää WordPressin Python-backendiin turvallisesti. |
 
-## 🚀 Keskeiset ratkaisut
+## Keskeiset ratkaisut
 
 * **Suorituskyky:** Raskas haku on siirretty pois PHP:ltä nopeaan Python-backendiin.
 * **Hakutarkkuus:** Hybridihaku (Strict match + Fuzzy logic) varmistaa, että oikeat tuotteet löytyvät myös kirjoitusvirheillä.
