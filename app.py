@@ -1,153 +1,203 @@
 """
-Tuotehaku – showcase-versio (FastAPI)
+Tuotehaku – backend-esimerkki (showcase-versio)
 
-Tämä tiedosto on anonymisoitu ja yksinkertaistettu esimerkki oikeasta
-tuotehaku-järjestelmästä. Tarkoitus on näyttää arkkitehtuuri ja
-koodityyli, ei valmis tuotantokoodi.
+Tämä on yksinkertaistettu versio tuotantokäytössä olleesta
+FastAPI-pohjaisesta tuotehakupalvelusta. Koodi demonstroi mm.:
 
-Teknologiat:
-- FastAPI
-- Pydantic-mallit (validaatio)
-- "Service layer" -rakenne hakulogiikalle
+- FastAPI + Pydantic
+- SQLAlchemy ORM -malli ja sessiot
+- Yksinkertainen välimuisti (TTLCache)
+- Hakuehtojen koostaminen dynaamisesti
+
 """
 
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
 
-app = FastAPI(title="Tuotehaku – Showcase")
+import os
+
+from fastapi import FastAPI, Depends, HTTPException, Query
+from pydantic import BaseModel
+from cachetools import TTLCache
+
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Float,
+    select,
+    and_,
+)
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+
+# --------------------------------------------------------------------
+# Konfiguraatio
+# --------------------------------------------------------------------
+
+# Oikea URL tulee lukemalla esim. ympäristömuuttujasta tai .env-tiedostosta.
+# ÄLÄ koskaan commitoi oikeita tunnuksia GitHubiin.
+DATABASE_URL = os.getenv(
+    "DEMO_DATABASE_URL",
+    "postgresql://user:password@localhost:5432/demo_products",
+)
+
+engine = create_engine(DATABASE_URL, echo=False, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+Base = declarative_base()
+
+# --------------------------------------------------------------------
+# Tietokantamalli (typistetty)
+# --------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Pydantic-mallit
-# ---------------------------------------------------------------------------
+class Product(Base):
+    """
+    Esimerkkituote. Oikeassa järjestelmässä sarakkeita oli enemmän
+    (esim. toimittajat, varastosaldot, EAN-koodit, jne.).
+    """
 
-class Product(BaseModel):
-    sku: str = Field(..., description="Tuotteen yksilöivä koodi")
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String, index=True)          # tuotenumero
+    name = Column(String, index=True)         # nimi
+    brand = Column(String, index=True)        # valmistaja/brand
+    category = Column(String, index=True)     # pääluokka
+    price = Column(Float)                     # myyntihinta
+
+
+# --------------------------------------------------------------------
+# Pydantic-skeemat
+# --------------------------------------------------------------------
+
+
+class ProductOut(BaseModel):
+    id: int
+    sku: str
     name: str
     brand: Optional[str] = None
-    price: float
-    in_stock: bool
-    supplier: str
+    category: Optional[str] = None
+    price: Optional[float] = None
+
+    class Config:
+        orm_mode = True
 
 
-class ProductQuery(BaseModel):
+# --------------------------------------------------------------------
+# Yhteinen DB-sessio / dependency
+# --------------------------------------------------------------------
+
+
+def get_db() -> Session:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------
+# Välimuisti – yksinkertainen TTLCache
+# --------------------------------------------------------------------
+
+# Avain: hakusana + valitut filtterit (string)
+# Arvo: list[ProductOut]
+search_cache: TTLCache = TTLCache(maxsize=1_000, ttl=60)  # 60 s
+
+
+def cache_key(
+    query: str,
+    brand: Optional[str],
+    category: Optional[str],
+) -> str:
     """
-    Hakuehdot – vastaava logiikka kuin oikeassa järjestelmässä, mutta
-    supistettuna. Todellisessa järjestelmässä tässä voisi olla mm.
-    tuoteryhmät, valmistajat, hintahaarukka, rajaukset varastosaldoon jne.
+    Muodostetaan yksinkertainen avain välimuistia varten.
     """
-    search: str = Field(..., description="Vapaa hakusana")
-    max_results: int = Field(50, ge=1, le=200)
-    only_in_stock: bool = False
+    return f"q={query}|brand={brand}|cat={category}"
 
 
-class SearchResponse(BaseModel):
-    total: int
-    results: List[Product]
+# --------------------------------------------------------------------
+# FastAPI-sovellus
+# --------------------------------------------------------------------
+
+app = FastAPI(
+    title="Tuotehaku – demo backend",
+    description=(
+        "Yksinkertaistettu esimerkki tuotantokäytössä olleesta "
+        "tuotehakupalvelusta (FastAPI + SQLAlchemy)."
+    ),
+    version="1.0.0",
+)
 
 
-# ---------------------------------------------------------------------------
-# Mockattu "service layer"
-# ---------------------------------------------------------------------------
-
-class ProductSearchService:
-    """
-    Showcase-versiossa käytetään kovakoodattua listaa tuotteita.
-    Oikeassa järjestelmässä tämä luokka:
-      - lukisi MySQL-tietokantaa
-      - kutsuisi toimittajien rajapintoja
-      - tekisi välimuistituksia jne.
-    """
-
-    def __init__(self) -> None:
-        self._products = [
-            Product(
-                sku="ABC-001",
-                name="USB-C kaapeli 1m",
-                brand="Generic",
-                price=9.90,
-                in_stock=True,
-                supplier="DemoSupplier",
-            ),
-            Product(
-                sku="ABC-002",
-                name="USB-C laturi 65W",
-                brand="PowerBrand",
-                price=39.90,
-                in_stock=False,
-                supplier="DemoSupplier",
-            ),
-            Product(
-                sku="ABC-003",
-                name="Langaton hiiri",
-                brand="Clicky",
-                price=24.90,
-                in_stock=True,
-                supplier="DemoSupplier",
-            ),
-        ]
-
-    def search_products(self, query: ProductQuery) -> SearchResponse:
-        # Todellisessa versiossa tämä olisi SQL / Elasticsearch / tms.
-        term = query.search.lower().strip()
-
-        filtered = [
-            p
-            for p in self._products
-            if term in p.name.lower() or term in p.sku.lower()
-        ]
-
-        if query.only_in_stock:
-            filtered = [p for p in filtered if p.in_stock]
-
-        # Rajataan määrä, mutta palautetaan myös total
-        total = len(filtered)
-        limited = filtered[: query.max_results]
-
-        return SearchResponse(total=total, results=limited)
+# --------------------------------------------------------------------
+# Health check
+# --------------------------------------------------------------------
 
 
-search_service = ProductSearchService()
-
-
-# ---------------------------------------------------------------------------
-# API-endpointit
-# ---------------------------------------------------------------------------
-
-@app.get("/health", summary="Health check")
+@app.get("/health", tags=["meta"])
 def health_check() -> dict:
     """
-    Yksinkertainen health-check – vastaava löytyy usein tuotantopalveluista.
+    Yksinkertainen health-check, jota esim. valvonta voi kysellä.
     """
+    try:
+        with engine.connect() as conn:
+            conn.execute(select(1))
+    except Exception as exc:  # pragma: no cover - demo
+        raise HTTPException(status_code=500, detail=str(exc))
+
     return {"status": "ok"}
 
 
-@app.get(
-    "/products",
-    response_model=SearchResponse,
-    summary="Hae tuotteita hakusanan perusteella",
-)
+# --------------------------------------------------------------------
+# Hakurajapinta
+# --------------------------------------------------------------------
+
+
+@app.get("/search", response_model=List[ProductOut], tags=["search"])
 def search_products(
-    q: str = Query(..., description="Hakusana, esim. 'usb'"),
-    max_results: int = Query(50, ge=1, le=200),
-    only_in_stock: bool = Query(False, description="Palauta vain varastossa olevat"),
-):
+    query: str = Query(..., min_length=1, description="Vapaa tekstihaku, esim. 'näyttö 27'"),
+    brand: Optional[str] = Query(None, description="Rajaa tiettyyn brändiin"),
+    category: Optional[str] = Query(None, description="Rajaa kategoriaan"),
+    limit: int = Query(20, ge=1, le=200, description="Palautettavien rivien määrä"),
+    db: Session = Depends(get_db),
+) -> List[ProductOut]:
     """
-    HTTP-rajapinta tuotehakuun.
+    Tuotehaku:
 
-    Tässä käytetään query-parametreja (q, max_results, only_in_stock),
-    mutta saman voisi toteuttaa myös POST:na ja käyttää ProductQuery-
-    runkomallia sellaisenaan.
+    - Hakee tuotteita nimen, tuotenumeroiden ym. perusteella.
+    - Tukee lisäsuodattimia (brand & category).
+    - Hyödyntää yksinkertaista 60 s TTL-välimuistia toistuviin hakuihin.
     """
-    if not q.strip():
-        raise HTTPException(status_code=400, detail="Hakusana ei voi olla tyhjä")
+    key = cache_key(query=query, brand=brand, category=category)
+    if key in search_cache:
+        return search_cache[key]
 
-    query = ProductQuery(
-        search=q,
-        max_results=max_results,
-        only_in_stock=only_in_stock,
+    # Rakennetaan dynaamisesti WHERE-ehdot
+    filters = []
+
+    # Yksinkertainen case-insensitive LIKE-haku
+    like_pattern = f"%{query.lower()}%"
+    filters.append(Product.name.ilike(like_pattern) | Product.sku.ilike(like_pattern))
+
+    if brand:
+        filters.append(Product.brand == brand)
+
+    if category:
+        filters.append(Product.category == category)
+
+    stmt = (
+        select(Product)
+        .where(and_(*filters))
+        .order_by(Product.name.asc())
+        .limit(limit)
     )
 
-    result = search_service.search_products(query)
+    products = db.execute(stmt).scalars().all()
+    result = [ProductOut.from_orm(p) for p in products]
+
+    # Talletetaan välimuistiin
+    search_cache[key] = result
+
     return result
